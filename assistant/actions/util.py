@@ -3,6 +3,7 @@
 anonymous_profile = {
     "id": "anonymous",
     "name": "anonymous"
+    "email": "anonymous@example.com"
 }
 
 # Priority to urgency ID mappings.

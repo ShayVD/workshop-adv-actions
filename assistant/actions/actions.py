@@ -6,6 +6,7 @@ from rasa_sdk.forms import FormAction, REQUESTED_SLOT
 from rasa_sdk.events import AllSlotsReset, SlotSet, EventType, SessionStarted, ActionExecuted
 from actions.snow import SnowAPI
 from actions.util import anonymous_profile
+from aiohttp.client_exceptions import ClientConnectorError
 
 logger = logging.getLogger(__name__)
 snow = SnowAPI()
@@ -30,7 +31,7 @@ class ActionSessionStart(Action):
         return "action_session_start"
 
     @staticmethod
-    async def fetch_slots(tracker: Tracker) -> List[EventType]:
+    async def fetch_slots(tracker: Tracker, dispatcher: CollectingDispatcher,) -> List[EventType]:
         """Add user profile to the slots if it is not set."""
 
         slots = []
@@ -41,19 +42,27 @@ class ActionSessionStart(Action):
 
         user_profile = tracker.get_slot("user_profile")
         user_name = tracker.get_slot("user_name")
+        user_email = tracker.get_slot("user_email")
 
         if user_profile is None:
             id = get_user_id_from_event(tracker)
             if id == anonymous_profile.get("id"):
                 user_profile = anonymous_profile
-            else:    
-                # Make an actual call to Snow API.
-                user_profile = await snow.get_user_profile(id)
+            else:
+                try:
+                    # Make an actual call to Snow API.
+                    user_profile = await snow.get_user_profile(id)
+                except Exception as e:
+                    logger.error(e)
+                    dispatcher.utter_message("ServiceNow is temporarily unavailable. You can continue with an anonymous profile.")
+                    user_profile = anonymous_profile
 
             slots.append(SlotSet(key="user_profile", value=user_profile))
 
         if user_name is None:
             slots.append(SlotSet(key="user_name", value=user_profile.get("name")))
+        if user_email is None:
+            slots.append(SlotSet(key="user_email", value=user_profile.get("email")))
 
         return slots
 
@@ -70,7 +79,7 @@ class ActionSessionStart(Action):
 
         # any slots that should be carried over should come after the
         # `session_started` event
-        newEvents = await self.fetch_slots(tracker)
+        newEvents = await self.fetch_slots(tracker, dispatcher)
         events.extend(newEvents)
 
         # an `action_listen` should be added at the end as a user message follows
@@ -95,11 +104,15 @@ class IncidentStatus(Action):
 
         # Handle anonymous profile. No need to call Snow API.
         if user_profile.get("id") == anonymous_profile.get("id"):
-            message = "Since you are anonymous, I can't realy tell your incident status :)"
+            message = "Since you are anonymous, I can't really tell your incident status :)"
         else:
-            incident_states = snow.states_db()
-            incidents_result = await snow.retrieve_incidents(user_profile)
-            incidents = incidents_result.get("incidents")
+            try:
+                incident_states = snow.states_db()
+                incidents_result = await snow.retrieve_incidents(user_profile)
+                incidents = incidents_result.get("incidents")
+            except Exception as e:
+                logger.error(e)
+                incidents = None
             if incidents:
                 message = "\n".join(
                     [
@@ -223,13 +236,17 @@ class OpenIncidentForm(FormAction):
                 "ticket for you. Appreciate your enthusiasm though :)"
             )
         else:
-            result = await snow.create_incident( 
-                user_profile.get("id"),           
-                tracker.get_slot("incident_title"),
-                tracker.get_slot("problem_description"),
-                tracker.get_slot("priority")
-            )
-            incident_number = result.get("number")
+            try:
+                result = await snow.create_incident( 
+                    user_profile.get("id"),           
+                    tracker.get_slot("incident_title"),
+                    tracker.get_slot("problem_description"),
+                    tracker.get_slot("priority")
+                )
+                incident_number = result.get("number")
+            except Exception as e:
+                logger.error(e)
+                incident_number = None
             if incident_number:
                 message = (
                     f"Incident {incident_number} has been opened for you. "

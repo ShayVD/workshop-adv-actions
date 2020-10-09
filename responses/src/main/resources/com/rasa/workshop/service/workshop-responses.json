@@ -6,7 +6,7 @@
   ],
   "utter_greet": [
     {
-      "text": "Hello! I'm your IT Helpdesk Assistant."
+      "text": "Hello {user_name}! I'm your IT Helpdesk Assistant."
     }
   ],
   "utter_goodbye": [
@@ -68,20 +68,20 @@
       "text": "I didn't quite understand that. Could you rephrase?"
     }
   ],
-  "utter_ask_confirm": [
+  "utter_ask_confirm" : [ 
     {
-      "text": "Should I open an incident?",
-      "buttons": [
+      "text" : "Should I open an incident with the following details?\n    Title: {incident_title}\n    Description: {problem_description}\n    Priority: {priority}\n    Email: {user_email}",
+      "buttons" : [ 
         {
-          "payload": "/affirm",
-          "title": "Yes"
-        },
+          "payload" : "/affirm",
+          "title" : "Yes"
+        }, 
         {
-          "payload": "/deny",
-          "title": "No, cancel the incident"
-        }
+          "payload" : "/deny",
+          "title" : "No, cancel the incident"
+        } 
       ]
-    }
+    } 
   ],
   "utter_incident_creation_canceled": [
     {

@@ -26,7 +26,9 @@ import io.vertx.core.json.JsonObject;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class ResponsesService {
 
@@ -68,11 +70,19 @@ public class ResponsesService {
 
   public JsonObject generateResponse(String pBotId, JsonObject pPayload)
     throws DocumentNotFoundException, DocumentException {
-    // TODO: Get tracker and use slots for variable replacement.
     String template = pPayload.getString("template");
     var doc = mDB.getDocument(RESPONSES_COLLECTION_ID, pBotId);
-    JsonArray response = doc.payload().getJsonArray(template);
-    return response.getJsonObject(0);
+    JsonArray responses = doc.payload().getJsonArray(template);
+    JsonObject response = responses.getJsonObject(ThreadLocalRandom.current().nextInt(0, responses.size()));
+    JsonObject slots = pPayload.getJsonObject("tracker").getJsonObject("slots");
+    for (String key: slots.fieldNames()) {
+      String slot_string = "{" + key + "}";
+      String text = response.getString("text");
+      if (text.contains(slot_string)) {
+        response.put("text", text.replace(slot_string, slots.getString(key)));
+      }
+    }
+    return response;
   }
 
   private static JsonObject rawResponsesJson() {
